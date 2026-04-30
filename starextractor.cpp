@@ -52,11 +52,16 @@ int StarExtractor::extractBackground()
      * */
     sep_image im;
     // Zero out the struct so optional pointers (noise, mask, etc.) default to
-    // null
+    // null   
     std::memset(&im, 0, sizeof(sep_image));
-    setImage_less_background(getImageData());   // Put the Original image into the BackgroupData object
-    im.data = getImage_less_background().data();    // Put this data into a new object
+    setImage_less_background(getImageData());    // Put the Original image into the BackgroupData object
+    // --- NEW: Construct the sep_image struct ---
+
     im.dtype = SEP_TFLOAT;
+    im.w=getNx();
+    im.h=getNy();
+    im.data = image_less_background.data();
+
 
     // a. Background estimation using sep_image
     sep_bkg *bkg = nullptr;
@@ -72,12 +77,20 @@ int StarExtractor::extractBackground()
         return 1;
     }
 
-    setBkgrms(bkg->globalrms);
-
     // Subtract background globally (modifies the data inside our QVector)
-    sep_status=sep_bkg_subarray(bkg, getImage_less_background().data(), SEP_TFLOAT);
+    sep_status=sep_bkg_subarray(bkg, image_less_background.data(), SEP_TFLOAT);
     // At this point the image_less_background should be original_imageData-background
     // So if we have "adjusted"/calculated the background - we can now just operate on that data for star extraction
+
+
+    if (image_less_background==original_imageData)
+        qWarning()<<"background and original are still the same.";
+    else
+        qInfo()<<"Background and originals are now different. This is expected";
+    setBkgrms(bkg->globalrms);
+
+
+
     if (sep_status)
     {
         qWarning() <<"Background extaction has an issue. status "<<sep_status;
@@ -119,9 +132,12 @@ int StarExtractor::extractStars()
     // Zero out the struct so optional pointers (noise, mask, etc.) default to
     // null
     std::memset(&im, 0, sizeof(sep_image));
-    im.data = getImage_less_background().data();
     im.dtype = SEP_TFLOAT;
-
+    im.w=getNx();
+    im.h=getNy();
+    im.data = image_less_background.data();
+    im.noise_type = SEP_NOISE_STDDEV;
+    im.noiseval= 12.0;
     int sep_status = sep_extract(
         &im,               // 1
         getDetect_threshold(),
@@ -138,13 +154,22 @@ int StarExtractor::extractStars()
         );
 
     if (sep_status == 0 && catalog != nullptr) {
-        int limit = qMin(catalog->nobj, 10);
-        for (int i = 0; i < limit; ++i) {
+        //int limit = qMin(catalog->nobj, 10);
+        for (int i = 0; i < catalog->nobj; ++i) {
             qDebug().nospace() << "Star " << i + 1 << ": "
                                << "X=" << catalog->x[i] << ", "
                                << "Y=" << catalog->y[i] << ", "
                                << "Flux=" << catalog->flux[i];
         }
+    }
+    else
+    {
+        char msg_text[250];
+        sep_get_errmsg(sep_status, msg_text);
+
+        qWarning() << "Sep_Extract returned: " << sep_status << " : "<<msg_text;
+
+        return sep_status;
     }
 
 
@@ -167,12 +192,11 @@ void StarExtractor::processFits(QString filePath) {
     setNy(naxes[0]);
 
     qInfo() << "File has a width of " << getNx() << " and height of " << getNy();
-    long npixels = getNx() * getNy();
-
-    QVector<float> imageData(npixels);
+    setImage_size(getNx() * getNy());
+    QVector<float> imageData(getImage_size());
     int anynul;
 
-    fits_read_img(fptr, TFLOAT, 1, npixels, nullptr, imageData.data(), &anynul,
+    fits_read_img(fptr, TFLOAT, 1, getImage_size(), nullptr, imageData.data(), &anynul,
                   &status);
     fits_close_file(fptr, &status);
 
@@ -412,4 +436,14 @@ float StarExtractor::getBkgrms() const
 void StarExtractor::setBkgrms(float newBkgrms)
 {
     bkgrms = newBkgrms;
+}
+
+int StarExtractor::getImage_size() const
+{
+    return image_size;
+}
+
+void StarExtractor::setImage_size(int newImage_size)
+{
+    image_size = newImage_size;
 }

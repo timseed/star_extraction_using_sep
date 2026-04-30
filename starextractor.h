@@ -74,6 +74,9 @@ public:
     float getBkgrms() const;
     void setBkgrms(float newBkgrms);
 
+    int getImage_size() const;
+    void setImage_size(int newImage_size);
+
 private:
 
 
@@ -90,6 +93,7 @@ private:
     double detect_threshold;//default is 0.0;
     int filter_type=SEP_FILTER_MATCHED;   // Matched as we are not using CONV
     float bkgrms;                   // Only updated when the background is extracted
+    int image_size;                 // Set when Original image is loaded
     QVector<float> original_imageData;
     QVector<float> image_less_background;   // Take original_image and remove the calculated background
 

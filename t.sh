@@ -1,0 +1,18 @@
+#/bin/bash
+alias qm='/Users/tim/Dev/QtCompiler/6.10.1/macos/bin/qmake'
+QT_ROOT=$(qm -query QT_INSTALL_PREFIX)
+echo "QT is based at $QT_ROOT"
+cmake \
+  -DCMAKE_PREFIX_PATH=$QT_ROOT \
+  -DCMAKE_BUILD_RPATH=$QT_ROOT/lib \
+  -DCMAKE_INSTALL_RPATH=$QT_ROOT/lib \
+  -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE \
+  -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+  -DQt6_DIR=$QT_ROOT/lib/cmake/Qt6 \
+  -DUSE_QT6=ON \
+  -DBUILD_WITH_QT6=ON \
+  -DQT_DEBUG_FIND_PACKAGE=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX=/usr/local \
+  -DBUILD_TESTING=OFF \
+  ..

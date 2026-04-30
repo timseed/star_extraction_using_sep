@@ -10,6 +10,8 @@ int main(int argc, char *argv[])
     w.show();
     StarExtractor se;
     se.loadFits("/Users/tim/Dev/Astro/Image/M_66/lights/M_66_Light_23.fits");
+    se.extractBackground();
+    se.extractStars();
     //se.processFits("/Users/tim/Dev/Astro/Image/M_66/lights/M_66_Light_23.fits");
     return 0;
 }

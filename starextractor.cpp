@@ -43,6 +43,114 @@ int StarExtractor::loadFits(QString filePath)
     return 0;   // All ok
 }
 
+int StarExtractor::extractBackground()
+{
+    /*
+     * This copies the original data into the image_less_background
+     * And then performs a destructive operation on the image_less_background data.
+     * The Original image should NOT be effected
+     * */
+    sep_image im;
+    // Zero out the struct so optional pointers (noise, mask, etc.) default to
+    // null
+    std::memset(&im, 0, sizeof(sep_image));
+    setImage_less_background(getImageData());   // Put the Original image into the BackgroupData object
+    im.data = getImage_less_background().data();    // Put this data into a new object
+    im.dtype = SEP_TFLOAT;
+
+    // a. Background estimation using sep_image
+    sep_bkg *bkg = nullptr;
+    int sep_status =
+        sep_background(&im,    // Pass the address of our configured sep_image
+                       getBackground_box(), getBackground_box(), // Background box width and height
+                       getBackground_filter(), getBackground_filter(),   // Filter width and height
+                       getBackgroup_filter_threshold(),    // Filter threshold
+                       &bkg);
+
+    if (sep_status != 0) {
+        qDebug() << "SEP background failed:" << sep_status;
+        return 1;
+    }
+
+    setBkgrms(bkg->globalrms);
+
+    // Subtract background globally (modifies the data inside our QVector)
+    sep_status=sep_bkg_subarray(bkg, getImage_less_background().data(), SEP_TFLOAT);
+    // At this point the image_less_background should be original_imageData-background
+    // So if we have "adjusted"/calculated the background - we can now just operate on that data for star extraction
+    if (sep_status)
+    {
+        qWarning() <<"Background extaction has an issue. status "<<sep_status;
+        return sep_status;
+    }
+    else
+    {
+        qInfo() << "Background Extraction successfull";
+    return 0;
+    }
+}
+
+int StarExtractor::extractStars()
+{
+    // b. Extract sources using sep_image
+    sep_catalog *catalog = nullptr;
+
+
+    // Parameters:
+    // 1.  im: the sep_image struct
+    // 2.  thresh: detection threshold
+    // 3.  minarea: min pixels for a source
+    // 4.  filter: convolution filter (nullptr for none)
+    // 5.  filter_type: 0 for flat, 1 for matched
+    // 6.  deblend_nthresh: deblending thresholds
+    // 7.  deblend_cont: deblending contrast
+    // 8.  clean_flag: perform cleaning (1 = yes)
+    // 9.  clean_param: cleaning parameter
+    // 10. noise_type: SEP_NOISE_STDDEV or SEP_NOISE_VAR (0 if using internal RMS)
+    // 11. noise: pointer to noise/variance array (nullptr to use globalrms from
+    // bkg)
+    // 12. gain: for Poisson noise (0.0 if not used)
+    // 13. segmap: pointer to int array for segmentation map (nullptr if not
+    // needed) Note: sep_extract also updated its signature in newer versions
+    qInfo() << "Extract Stars";
+    double detect_threshold = 3.0;
+    int filter_type=SEP_FILTER_MATCHED;   // Matched as we are not using CONV
+    sep_image im;
+    // Zero out the struct so optional pointers (noise, mask, etc.) default to
+    // null
+    std::memset(&im, 0, sizeof(sep_image));
+    im.data = getImage_less_background().data();
+    im.dtype = SEP_TFLOAT;
+
+    int sep_status = sep_extract(
+        &im,               // 1
+        getDetect_threshold(),
+        SEP_THRESH_REL,   // Check Units of Standard Deviation
+        getMin_area_pixels(),                 // 3
+        nullptr,           // 4 conv_array
+        0,0,        //Conv height and width
+        filter_type,
+        getDeblend_threshold(),
+        getDeblend_cont(),
+        clean_flag,
+        clean_param,
+        &catalog
+        );
+
+    if (sep_status == 0 && catalog != nullptr) {
+        int limit = qMin(catalog->nobj, 10);
+        for (int i = 0; i < limit; ++i) {
+            qDebug().nospace() << "Star " << i + 1 << ": "
+                               << "X=" << catalog->x[i] << ", "
+                               << "Y=" << catalog->y[i] << ", "
+                               << "Flux=" << catalog->flux[i];
+        }
+    }
+
+
+    return sep_status;
+}
+
 void StarExtractor::processFits(QString filePath) {
     fitsfile *fptr;
     int status = 0;
@@ -277,11 +385,31 @@ void StarExtractor::setClean_param(double newClean_param)
 
 QVector<float> StarExtractor::getImageData() const
 {
-    return imageData;
+    return original_imageData;
 }
 
 void StarExtractor::setImageData(const QVector<float> &newImageData)
 {
     qInfo() << "Storing ImageData size " << newImageData.size();
-    imageData = newImageData;
+    original_imageData = newImageData;
+}
+
+QVector<float> StarExtractor::getImage_less_background() const
+{
+    return image_less_background;
+}
+
+void StarExtractor::setImage_less_background(const QVector<float> &newImage_less_background)
+{
+    image_less_background = newImage_less_background;
+}
+
+float StarExtractor::getBkgrms() const
+{
+    return bkgrms;
+}
+
+void StarExtractor::setBkgrms(float newBkgrms)
+{
+    bkgrms = newBkgrms;
 }

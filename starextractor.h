@@ -25,6 +25,8 @@ class StarExtractor : public QObject{
 public:
     explicit StarExtractor(QObject *parent = nullptr);
     int loadFits(QString filePath);
+    int extractBackground();
+    int extractStars();
 
 
 
@@ -66,6 +68,12 @@ public:
     QVector<float> getImageData() const;
     void setImageData(const QVector<float> &newImageData);
 
+    QVector<float> getImage_less_background() const;
+    void setImage_less_background(const QVector<float> &newImage_less_background);
+
+    float getBkgrms() const;
+    void setBkgrms(float newBkgrms);
+
 private:
 
 
@@ -81,8 +89,9 @@ private:
     int min_area_pixels;//default is 5;
     double detect_threshold;//default is 0.0;
     int filter_type=SEP_FILTER_MATCHED;   // Matched as we are not using CONV
-    QVector<float> imageData;
-
+    float bkgrms;                   // Only updated when the background is extracted
+    QVector<float> original_imageData;
+    QVector<float> image_less_background;   // Take original_image and remove the calculated background
 
 };
 

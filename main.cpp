@@ -9,6 +9,7 @@ int main(int argc, char *argv[])
     MainWindow w;
     w.show();
     StarExtractor se;
-    se.processFits("/Users/tim/Dev/Astro/Image/M_66/lights/M_66_Light_23.fits");
+    se.loadFits("/Users/tim/Dev/Astro/Image/M_66/lights/M_66_Light_23.fits");
+    //se.processFits("/Users/tim/Dev/Astro/Image/M_66/lights/M_66_Light_23.fits");
     return 0;
 }

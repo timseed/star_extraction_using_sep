@@ -6,7 +6,7 @@ QImageFits::QImageFits(QObject *parent)
 
 
 
-QImage QImageFits::convertFitsToGrayscale(const std::vector<float>& fitsData, int width, int height)
+QImage QImageFits::convertFitsToGrayscale(const QVector<float>& fitsData, int width, int height)
 /*
  * This is a VERY basic way of displaying the data
  * The code above applies a simple Linear Stretch.
@@ -17,8 +17,10 @@ QImage QImageFits::convertFitsToGrayscale(const std::vector<float>& fitsData, in
  *
  * */
 {
+    qInfo() << "Starting convert to GrayScale";
     // 1. Validate inputs
     if (fitsData.empty() || width <= 0 || height <= 0) {
+        qWarning()<< "Missing data. Either FITS, height or width is invalid";
         return QImage();
     }
 
@@ -53,7 +55,7 @@ QImage QImageFits::convertFitsToGrayscale(const std::vector<float>& fitsData, in
             rowPointer[x] = static_cast<uchar>(std::clamp(scaledValue, 0, 255));
         }
     }
-
+    setGrayscale(image);
     return image;
 }
 
@@ -90,10 +92,10 @@ void QImageFits::displayFitsImage(QLabel* displayWidget, const QImage& sourceIma
 QImage QImageFits::createStarMask(const QVector<Star_Summary>& stars, int width, int height) {
     // 1. Create a 32-bit image to support color (RGB or ARGB)
     QImage mask(width, height, QImage::Format_ARGB32);
-    mask.fill(Qt::transparent);
 
     // 2. Fill the image with solid black
-    mask.fill(Qt::black);
+    mask.fill(Qt::transparent);
+    //mask.fill(Qt::black); If we use black - we can not "see through" the layer
 
     // 3. Initialize QPainter to draw on the mask
     QPainter painter(&mask);
@@ -120,6 +122,48 @@ QImage QImageFits::createStarMask(const QVector<Star_Summary>& stars, int width,
 
     // 6. End painting
     painter.end();
-
+    setStarmask(mask);
     return mask;
+}
+
+QImage QImageFits::getGrayscale() const
+{
+    return grayscale;
+}
+
+void QImageFits::setGrayscale(const QImage &newGrayscale)
+{
+    qInfo() << "We have a GrayScale image in cache";
+    grayscale = newGrayscale;
+}
+
+QImage QImageFits::getStarmask() const
+{
+    return starmask;
+}
+
+void QImageFits::setStarmask(const QImage &newStarmask)
+{
+    qInfo() << "We have a starmask image in cache";
+    starmask = newStarmask;
+}
+
+QImage QImageFits::merge(QString SaveAs)
+{
+    QImage base = getGrayscale().convertToFormat(QImage::Format_ARGB32);
+    QImage overlay = getStarmask();
+
+    // Create output (copy or blank)
+    QImage result = base.copy();  // keeps original unchanged
+
+    QPainter painter(&result);
+    painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+    painter.drawImage(0, 0, overlay);
+    painter.end();
+    if (SaveAs!="")
+    {
+        result.save(SaveAs,"PNG",70);
+        qInfo() << "Saved Merge Image as " << SaveAs;
+    }
+    return result;
 }

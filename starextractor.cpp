@@ -181,11 +181,10 @@ int StarExtractor::extractStars()
         clean_param,
         &star_catalog
         );
-
-
+    qInfo() << "sep_extract produced "<<star_catalog->nobj << " objects.";
 
     if (sep_status == 0 && star_catalog != nullptr) {
-        //int limit = qMin(catalog->nobj, 10);
+        int limit = qMin(star_catalog->nobj, 10);
 
         double frac[1] = {0.5};
         double r[1];
@@ -194,7 +193,7 @@ int StarExtractor::extractStars()
         double fluxtot[1];
         //fluxtot[0] = star_catalog->objects[i].flux;
 
-        for (int i = 0; i < star_catalog->nobj; ++i) {
+        for (int i = 0; i < limit; ++i) {
 #ifdef DEBUG
             qDebug().nospace() << "Star " << i + 1 << ": "
                                 << "X=" << star_catalog->x[i] << ", "

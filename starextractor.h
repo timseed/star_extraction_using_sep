@@ -89,6 +89,9 @@ public:
     int getImage_size() const;
     void setImage_size(int newImage_size);
     QVector<Star_Summary> getStar_Summary(){return stars;}
+    QVector<float> getOrigFits(){return original_imageData;}
+    QVector<float> getOrigLessBackground(){return image_less_background;}
+
 
 private:
 

@@ -51,7 +51,8 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(StarSummary2
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
-        starextractor.h starextractor.cpp)
+        starextractor.h starextractor.cpp
+        qimagefits.h qimagefits.cpp)
 endif()
 # --- Include directories ---
 target_include_directories(StarSummary2 PRIVATE

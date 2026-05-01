@@ -19,24 +19,36 @@
 // }
 
 
+struct Star_Summary{
+    double x;
+    double y;
+    int id;
+    float flux;
+    double hfr;
+};
+enum eScope {SV555,GSO6};
+enum eCcd  {SV405,SV905};
+enum eWx {Clear,Ok,LightCloud,Hope};
+
 
 class StarExtractor : public QObject{
     Q_OBJECT
 public:
     explicit StarExtractor(QObject *parent = nullptr);
+    int set_param(eScope scope, eCcd ccd, eWx wx);
     int loadFits(QString filePath);
     int extractBackground();
     int extractStars();
-
+    int listStars();
 
 
     void processFits(QString filePath);
 
-    long getNx() const;
-    void setNx(long newNx);
+    long getWidth() const;
+    void setWidth(long newWidth);
 
-    long getNy() const;
-    void setNy(long newNy);
+    long getHeight() const;
+    void setHeight(long newHeight);
 
     int getBackground_box() const;
     void setBackground_box(int newBackground_box);
@@ -76,14 +88,15 @@ public:
 
     int getImage_size() const;
     void setImage_size(int newImage_size);
+    QVector<Star_Summary> getStar_Summary(){return stars;}
 
 private:
 
-
-    long nx;
-    long ny;
+    QVector<Star_Summary> stars;
+    long fits_width;
+    long fits_height;
     int background_box;   //default is 64 (height and width)
-    int background_filter; // default 3 (heght and width)
+    int background_filter; // default 3 (height and width)
     double backgroup_filter_threshold; // default 0
     int deblend_threshold; //default is 32;
     double deblend_cont;//default is 0.005;
@@ -91,12 +104,15 @@ private:
     double clean_param;//default is 1.0;
     int min_area_pixels;//default is 5;
     double detect_threshold;//default is 0.0;
-    int filter_type=SEP_FILTER_MATCHED;   // Matched as we are not using CONV
-    float bkgrms;                   // Only updated when the background is extracted
-    int image_size;                 // Set when Original image is loaded
+    int filter_type=SEP_FILTER_MATCHED;     // Matched as we are not using CONV
+    float bkgrms;                           // Only updated when the background is extracted
+    int image_size;                         // Set when Original image is loaded
     QVector<float> original_imageData;
     QVector<float> image_less_background;   // Take original_image and remove the calculated background
-
+    sep_catalog *star_catalog;
+    // HFR Parameters
+    double max_star_radius=15.0;
+    int sub_pix_sampling=5;
 };
 
 #endif // STAREXTRACTOR_H

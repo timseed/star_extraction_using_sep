@@ -11,6 +11,32 @@ StarExtractor::StarExtractor(QObject *parent)
     setDeblend_cont(0.005);
     setClean_flag(1);
     setClean_param(1.0);
+    star_catalog = nullptr;
+}
+
+int StarExtractor::set_param(eScope scope, eCcd ccd, eWx wx)
+/*
+ * Here I can try and set/adjust some of the parameters that match the
+ *
+ *
+ * */
+
+{
+    switch (ccd)
+    {
+    case eCcd::SV905: {
+
+    }
+    case eCcd::SV405: {
+
+    }
+    default:
+    {
+        qWarning() << "Internal Error No matching CCD";
+        return 1;
+    }
+
+    }
 }
 
 int StarExtractor::loadFits(QString filePath)
@@ -26,11 +52,11 @@ int StarExtractor::loadFits(QString filePath)
     int bitpix, naxis;
     long naxes[2] = {0, 0};
     fits_get_img_param(fptr, 2, &bitpix, &naxis, naxes, &status);
-    setNx(naxes[1]);
-    setNy(naxes[0]);
+    setWidth(naxes[1]);
+    setHeight(naxes[0]);
 
-    qInfo() << "File has a width of " << getNx() << " and height of " << getNy();
-    long npixels = getNx() * getNy();
+    qInfo() << "File has a width of " << getWidth() << " and height of " << getHeight();
+    long npixels = getWidth() * getHeight();
 
 
     int anynul;
@@ -58,8 +84,8 @@ int StarExtractor::extractBackground()
     // --- NEW: Construct the sep_image struct ---
 
     im.dtype = SEP_TFLOAT;
-    im.w=getNx();
-    im.h=getNy();
+    im.w=getWidth();
+    im.h=getHeight();
     im.data = image_less_background.data();
 
 
@@ -105,8 +131,10 @@ int StarExtractor::extractBackground()
 
 int StarExtractor::extractStars()
 {
-    // b. Extract sources using sep_image
-    sep_catalog *catalog = nullptr;
+    stars.clear();      //Remove any previus stars
+
+    // Extract sources using sep_image
+
 
 
     // Parameters:
@@ -125,19 +153,20 @@ int StarExtractor::extractStars()
     // 12. gain: for Poisson noise (0.0 if not used)
     // 13. segmap: pointer to int array for segmentation map (nullptr if not
     // needed) Note: sep_extract also updated its signature in newer versions
+    star_catalog = nullptr;
     qInfo() << "Extract Stars";
-    double detect_threshold = 3.0;
+
     int filter_type=SEP_FILTER_MATCHED;   // Matched as we are not using CONV
     sep_image im;
     // Zero out the struct so optional pointers (noise, mask, etc.) default to
     // null
     std::memset(&im, 0, sizeof(sep_image));
     im.dtype = SEP_TFLOAT;
-    im.w=getNx();
-    im.h=getNy();
+    im.w=getWidth();
+    im.h=getHeight();
     im.data = image_less_background.data();
     im.noise_type = SEP_NOISE_STDDEV;
-    im.noiseval= 12.0;
+    im.noiseval= 4.0;
     int sep_status = sep_extract(
         &im,               // 1
         getDetect_threshold(),
@@ -150,30 +179,86 @@ int StarExtractor::extractStars()
         getDeblend_cont(),
         clean_flag,
         clean_param,
-        &catalog
+        &star_catalog
         );
 
-    if (sep_status == 0 && catalog != nullptr) {
+
+
+    if (sep_status == 0 && star_catalog != nullptr) {
         //int limit = qMin(catalog->nobj, 10);
-        for (int i = 0; i < catalog->nobj; ++i) {
+
+        double frac[1] = {0.5};
+        double r[1];
+        short flag[1];
+
+        double fluxtot[1];
+        //fluxtot[0] = star_catalog->objects[i].flux;
+
+        for (int i = 0; i < star_catalog->nobj; ++i) {
+#ifdef DEBUG
             qDebug().nospace() << "Star " << i + 1 << ": "
-                               << "X=" << catalog->x[i] << ", "
-                               << "Y=" << catalog->y[i] << ", "
-                               << "Flux=" << catalog->flux[i];
+                                << "X=" << star_catalog->x[i] << ", "
+                                << "Y=" << star_catalog->y[i] << ", "
+                                << "Flux=" << star_catalog->flux[i];
+#endif
+            fluxtot[0] = star_catalog->flux[i];
+            sep_status = sep_flux_radius(
+                &im,
+                star_catalog->x[i],
+                star_catalog->y[i],
+                10.0,        // rmax
+                i,           // object id
+                5,           // subpix sampling
+                0,           // inflag
+                fluxtot,
+                frac,
+                1,
+                r,
+                flag
+                );
+            //r[0] is the output using 0.5 i.e. HFR
+            Star_Summary s={star_catalog->x[i],
+                star_catalog->y[i],
+                              i,
+                              star_catalog->flux[i],r[0] };
+            stars.append(s);
+
         }
     }
     else
     {
         char msg_text[250];
         sep_get_errmsg(sep_status, msg_text);
-
         qWarning() << "Sep_Extract returned: " << sep_status << " : "<<msg_text;
-
         return sep_status;
     }
 
 
     return sep_status;
+}
+
+int StarExtractor::listStars()
+{
+    /*
+     * This assumes we have read Fits, calculated background, extracted the stars
+     * If not... there will be nothing here.
+     */
+    qInfo()<<"List Stars";
+    qInfo()<<"=======================================================";
+    if (stars.count()>0)
+    {
+        // Read-only traversal
+        QVector<Star_Summary>::const_iterator i;
+        for (i = stars.constBegin(); i != stars.constEnd(); ++i) {
+            qInfo() << "id:"<<i->id<<" x:"<<i->x<<"y:"<<i->y<<" hft:"<<i->hfr<<" flux:"<<i->flux;
+        }
+    }
+    else
+    {
+        qWarning() << "There are no stars in the summary data";
+        return(1);
+    }
+    return(0);
 }
 
 void StarExtractor::processFits(QString filePath) {
@@ -188,11 +273,11 @@ void StarExtractor::processFits(QString filePath) {
     int bitpix, naxis;
     long naxes[2] = {0, 0};
     fits_get_img_param(fptr, 2, &bitpix, &naxis, naxes, &status);
-    setNx(naxes[1]);
-    setNy(naxes[0]);
+    setWidth(naxes[1]);
+    setHeight(naxes[0]);
 
-    qInfo() << "File has a width of " << getNx() << " and height of " << getNy();
-    setImage_size(getNx() * getNy());
+    qInfo() << "File has a width of " << getWidth() << " and height of " << getHeight();
+    setImage_size(getWidth() * getHeight());
     QVector<float> imageData(getImage_size());
     int anynul;
 
@@ -204,7 +289,7 @@ void StarExtractor::processFits(QString filePath) {
         return;
 
     // --- NEW: Construct the sep_image struct ---
-    int dims[2] = {static_cast<int>(getNx()), static_cast<int>(getNy())};
+    int dims[2] = {static_cast<int>(getWidth()), static_cast<int>(getHeight())};
 
     sep_image im;
     // Zero out the struct so optional pointers (noise, mask, etc.) default to
@@ -297,24 +382,24 @@ void StarExtractor::processFits(QString filePath) {
         sep_bkg_free(bkg);
 }
 
-long StarExtractor::getNx() const
+long StarExtractor::getWidth() const
 {
-    return nx;
+    return fits_width;
 }
 
-void StarExtractor::setNx(long newNx)
+void StarExtractor::setWidth(long newWidth)
 {
-    nx = newNx;
+    fits_width = newWidth;
 }
 
-long StarExtractor::getNy() const
+long StarExtractor::getHeight() const
 {
-    return ny;
+    return fits_height;
 }
 
-void StarExtractor::setNy(long newNy)
+void StarExtractor::setHeight(long newHeight)
 {
-    ny = newNy;
+    fits_height = newHeight;
 }
 
 int StarExtractor::getBackground_box() const
